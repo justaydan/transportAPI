@@ -1,0 +1,24 @@
+version: '3.8'
+services:
+    app:
+        container_name: transport_api
+        build:
+            context: .
+            dockerfile: Dockerfile
+        ports:
+            - "8080:80"
+        volumes:
+            - .:/var/www/html
+        depends_on:
+            - mongo
+
+    mongo:
+        container_name: mongo_db
+        image: mongo
+        ports:
+            - "27017:27017"
+        volumes:
+            - mongodata:/data/db
+
+volumes:
+    mongodata:

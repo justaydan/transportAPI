@@ -96,6 +96,14 @@ return [
             'search_path' => 'public',
             'sslmode' => 'prefer',
         ],
+        'mongodb' => [
+            'driver'   => 'mongodb',
+            'dsn'      => env('DB_URI', ''),
+            'database' => env('DB_DATABASE', 'your_database_name'),
+            'options'  => [
+                'ssl' => true,  // Enable SSL for MongoDB Atlas connection
+            ],
+        ],
 
         'sqlsrv' => [
             'driver' => 'sqlsrv',
