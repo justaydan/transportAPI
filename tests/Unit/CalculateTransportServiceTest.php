@@ -12,9 +12,6 @@ use Tests\TestCase;
 class CalculateTransportServiceTest extends TestCase
 {
 
-    /** @var array */
-    private array $cities;
-
     /** @var MockInterface */
     protected MockInterface $service;
 
@@ -24,9 +21,7 @@ class CalculateTransportServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->cities = (new PrepareBodyHelper())->cities();
         $this->service = Mockery::mock(CalculateTransportService::class)->makePartial();
-
     }
 
     /**
@@ -35,39 +30,121 @@ class CalculateTransportServiceTest extends TestCase
     public static function providerForGoogleMock(): array
     {
         return [
-            'Case 1' => [
-                [
-                    'Berlin' => ['Hamburg' => 50, 'Cologne' => 100, 'Frankfurt' => 150],
-                    'Hamburg' => ['Berlin' => 50, 'Cologne' => 75, 'Frankfurt' => 90],
-                    'Cologne' => ['Berlin' => 100, 'Hamburg' => 75, 'Frankfurt' => 50],
-                    'Frankfurt' => ['Berlin' => 150, 'Hamburg' => 90, 'Cologne' => 50],
-                ]
+            [
+                "distances" => [
+                    'Berlin' => ['Hamburg' => 50],
+                    'Hamburg' => ['Cologne' => 75],
+                    'Cologne' => ['Frankfurt' => 50],
+                ],
+                'cities' => [
+                    [
+                        "country" => "DE",
+                        "zip" => "10115",
+                        "city" => "Berlin"
+                    ],
+                    [
+                        "country" => "DE",
+                        "zip" => "20095",
+                        "city" => "Hamburg"
+                    ],
+                    [
+                        "city" => "Cologne",
+                        "zip" => "50667",
+                        "country" => "DE"
+                    ]
+                    , [
+                        "city" => "Frankfurt",
+                        "zip" => "60311",
+                        "country" => "DE"
+                    ]
+                ], 'result' => 175
             ],
-            'Case 2' => [
-                [
-                    'Berlin' => ['Hamburg' => 40, 'Cologne' => 100, 'Frankfurt' => 120],
-                    'Hamburg' => ['Berlin' => 40, 'Cologne' => 75, 'Frankfurt' => 90],
-                    'Cologne' => ['Berlin' => 100, 'Hamburg' => 75, 'Frankfurt' => 50],
-                    'Frankfurt' => ['Berlin' => 120, 'Hamburg' => 90, 'Cologne' => 50],
-                ]
+            [
+                "distances" => [
+                    'Berlin' => ['Cologne' => 80],
+                    'Cologne' => ['Frankfurt' => 150],
+                    'Frankfurt' => ['Berlin' => 100],
+                ],
+                'cities' => [
+                    [
+                        "country" => "DE",
+                        "zip" => "10115",
+                        "city" => "Berlin"
+                    ],
+                    [
+                        "city" => "Cologne",
+                        "zip" => "50667",
+                        "country" => "DE"
+                    ],
+                    [
+                        "city" => "Frankfurt",
+                        "zip" => "60311",
+                        "country" => "DE"
+                    ], [
+                        "country" => "DE",
+                        "zip" => "20095",
+                        "city" => "Berlin"
+                    ]
+                ], 'result' => 330
             ],
-            'Case 3' => [
-                [
-                    'Berlin' => ['Hamburg' => 200, 'Cologne' => 300, 'Frankfurt' => 400],
-                    'Hamburg' => ['Berlin' => 200, 'Cologne' => 50, 'Frankfurt' => 50],
-                    'Cologne' => ['Berlin' => 300, 'Hamburg' => 50, 'Frankfurt' => 120],
-                    'Frankfurt' => ['Berlin' => 400, 'Hamburg' => 50, 'Cologne' => 120],
-                ]
+            [
+                "distances" => [
+                    'Berlin' => ['Frankfurt' => 123],
+                    'Frankfurt' => ['Cologne' => 56],
+                    'Cologne' => ['Hamburg' => 50],
+                ],
+                'cities' => [
+                    [
+                        "country" => "DE",
+                        "zip" => "10115",
+                        "city" => "Berlin"
+                    ],
+                    [
+                        "city" => "Frankfurt",
+                        "zip" => "60311",
+                        "country" => "DE"
+                    ],
+                    [
+                        "city" => "Cologne",
+                        "zip" => "50667",
+                        "country" => "DE"
+                    ],
+                    [
+                        "country" => "DE",
+                        "zip" => "20095",
+                        "city" => "Hamburg"
+                    ],
+
+                ], 'result' => 229
             ],
+            [
+                "distances" => [
+                    'Berlin' => ['Frankfurt' => 23],
+                ],
+                'cities' => [
+                    [
+                        "country" => "DE",
+                        "zip" => "10115",
+                        "city" => "Berlin"
+                    ],
+                    [
+                        "city" => "Frankfurt",
+                        "zip" => "60311",
+                        "country" => "DE"
+                    ]
+                ], 'result' => 23
+            ]
         ];
     }
 
     /**
      * @param array $distances
+     * @param array $cities
+     * @param int $result
      * @return void
      */
     #[DataProvider('providerForGoogleMock')]
-    public function testBuildMaxtricForGraphMethod(array $distances): void
+    public function testCalculateDistanceMethod(array $distances, array $cities, int $result): void
     {
         $this->service->shouldReceive('callGoogleApi')
             ->andReturnUsing(function ($origin, $destination) use ($distances) {
@@ -77,58 +154,10 @@ class CalculateTransportServiceTest extends TestCase
             });
         $this->app->instance(CalculateTransportService::class, $this->service);
 
-        $grid = $this->service->buildMaxtricForGraph($this->cities['addresses']);
-        $cities = array_keys($distances);
-        foreach ($cities as $i => $cityA) {
-            foreach ($cities as $j => $cityB) {
-                if ($i !== $j) { // Avoid self-comparison
-                    $expectedDistance = $distances[$cityA][$cityB];
-                    $this->assertEquals(
-                        $expectedDistance,
-                        $grid[$i][$j],
-                        "Distance between $cityA and $cityB should be $expectedDistance"
-                    );
-                }
-            }
-        }
+        $distance = $this->service->calculateDistance($cities);
+        $this->assertEquals($result, $distance);
     }
 
 
-    /**
-     * @return array
-     */
-    public static function providerForDijkstra(): array
-    {
-        return [
-            'Case 1' => [
-                [
-                    [0, 283.885, 576.344, 547.528],
-                    [283.885, 0, 425.572, 492.125],
-                    [576.344, 425.572, 0, 192.593],
-                    [547.528, 492.125, 192.593, 0]
-                ], 'result' => 902.05
-            ],
-            'Case 2' => [
-                [
-                    [0, 200, 300, 400],
-                    [200, 0, 50, 50],
-                    [300, 50, 0, 120],
-                    [400, 50, 120, 0]
-                ], 'result' => 350
-            ]
-        ];
-    }
-
-    /**
-     * @param array $grid
-     * @param float $result
-     * @return void
-     */
-    #[DataProvider('providerForDijkstra')]
-    public function testDijkstraMinCostAllNodes(array $grid, float $result): void
-    {
-        $response = $this->service->dijkstraMinCostAllNodes($grid);
-        $this->assertEquals($result, $response);
-    }
 
 }

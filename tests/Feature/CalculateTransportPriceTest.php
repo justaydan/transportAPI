@@ -20,18 +20,14 @@ class CalculateTransportPriceTest extends TestCase
     /** @var array */
     protected array $body;
 
-    /** @var PrepareBodyHelper  */
-    protected PrepareBodyHelper $bodyHelper;
-
     /**
      * @return void
      */
     protected function setUp(): void
     {
         parent::setUp();
-        $this->bodyHelper = new PrepareBodyHelper();
         $this->headers = ['x-api-key' => env('API_KEY')];
-        $this->body = $this->bodyHelper->cities();
+        $this->body = [];
     }
 
     /**
@@ -40,40 +36,122 @@ class CalculateTransportPriceTest extends TestCase
     public static function providerForGoogleMock(): array
     {
         return [
-            'Case 1' => [
-                [
-                    'Berlin' => ['Hamburg' => 50, 'Cologne' => 100, 'Frankfurt' => 150],
-                    'Hamburg' => ['Berlin' => 50, 'Cologne' => 75, 'Frankfurt' => 90],
-                    'Cologne' => ['Berlin' => 100, 'Hamburg' => 75, 'Frankfurt' => 50],
-                    'Frankfurt' => ['Berlin' => 150, 'Hamburg' => 90, 'Cologne' => 50],
-                ], 'result' => 175
+            [
+                "distances" => [
+                    'Berlin' => ['Hamburg' => 50],
+                    'Hamburg' => ['Cologne' => 75],
+                    'Cologne' => ['Frankfurt' => 50],
+                ],
+                'cities' => [
+                    [
+                        "country" => "DE",
+                        "zip" => "10115",
+                        "city" => "Berlin"
+                    ],
+                    [
+                        "country" => "DE",
+                        "zip" => "20095",
+                        "city" => "Hamburg"
+                    ],
+                    [
+                        "city" => "Cologne",
+                        "zip" => "50667",
+                        "country" => "DE"
+                    ]
+                    , [
+                        "city" => "Frankfurt",
+                        "zip" => "60311",
+                        "country" => "DE"
+                    ]
+                ], 'result' => 175, 'status' => Response::HTTP_OK
             ],
-            'Case 2' => [
-                [
-                    'Berlin' => ['Hamburg' => 40, 'Cologne' => 100, 'Frankfurt' => 120],
-                    'Hamburg' => ['Berlin' => 40, 'Cologne' => 75, 'Frankfurt' => 90],
-                    'Cologne' => ['Berlin' => 100, 'Hamburg' => 75, 'Frankfurt' => 50],
-                    'Frankfurt' => ['Berlin' => 120, 'Hamburg' => 90, 'Cologne' => 50],
-                ], 'result' => 165
+            [
+                "distances" => [
+                    'Berlin' => ['Cologne' => 80],
+                    'Cologne' => ['Frankfurt' => 150],
+                    'Frankfurt' => ['Berlin' => 100],
+                ],
+                'cities' => [
+                    [
+                        "country" => "DE",
+                        "zip" => "10115",
+                        "city" => "Berlin"
+                    ],
+                    [
+                        "city" => "Cologne",
+                        "zip" => "50667",
+                        "country" => "DE"
+                    ],
+                    [
+                        "city" => "Frankfurt",
+                        "zip" => "60311",
+                        "country" => "DE"
+                    ], [
+                        "country" => "DE",
+                        "zip" => "10115",
+                        "city" => "Berlin"
+                    ]
+                ], 'result' => 330, 'status' => Response::HTTP_OK
             ],
-            'Case 3' => [
-                [
-                    'Berlin' => ['Hamburg' => 200, 'Cologne' => 300, 'Frankfurt' => 400],
-                    'Hamburg' => ['Berlin' => 200, 'Cologne' => 50, 'Frankfurt' => 50],
-                    'Cologne' => ['Berlin' => 300, 'Hamburg' => 50, 'Frankfurt' => 120],
-                    'Frankfurt' => ['Berlin' => 400, 'Hamburg' => 50, 'Cologne' => 120],
-                ], 'result' => 350
+            [
+                "distances" => [
+                    'Berlin' => ['Frankfurt' => 123],
+                    'Frankfurt' => ['Cologne' => 56],
+                    'Cologne' => ['Hamburg' => 50],
+                ],
+                'cities' => [
+                    [
+                        "country" => "DE",
+                        "zip" => "10115",
+                        "city" => "Berlin"
+                    ],
+                    [
+                        "city" => "Frankfurt",
+                        "zip" => "60311",
+                        "country" => "DE"
+                    ],
+                    [
+                        "city" => "Cologne",
+                        "zip" => "50667",
+                        "country" => "DE"
+                    ],
+                    [
+                        "country" => "DE",
+                        "zip" => "20095",
+                        "city" => "Hamburg"
+                    ],
+
+                ], 'result' => 229, 'status' => Response::HTTP_OK
             ],
+            [
+                "distances" => [
+                    'Berlin' => ['Frankfurt' => 23],
+                ],
+                'cities' => [
+                    [
+                        "country" => "DE",
+                        "zip" => "10115",
+                        "city" => "Berlin"
+                    ],
+                    [
+                        "city" => "Frankfurt",
+                        "zip" => "60311",
+                        "country" => "DE"
+                    ]
+                ], 'result' => 23, 'status' => Response::HTTP_OK
+            ]
         ];
     }
 
     /**
      * @param array $distances
+     * @param array $cities
      * @param float $result
+     * @param int $status
      * @return void
      */
     #[DataProvider('providerForGoogleMock')]
-    public function testOnSuccess(array $distances, float $result): void
+    public function testOnSuccess(array $distances, array $cities, float $result, int $status): void
     {
         $mockGoogleApi = Mockery::mock(CalculateTransportService::class)->makePartial();
         $mockGoogleApi->shouldReceive('callGoogleApi')
@@ -83,7 +161,9 @@ class CalculateTransportPriceTest extends TestCase
                 return $distances[$originCity][$destinationCity] ?? 0;
             });
         $this->app->instance(CalculateTransportService::class, $mockGoogleApi);
+        $this->body['addresses'] = $cities;
         $response = $this->sendRequest();
+        $response->assertStatus($status);
         $vehiclePrices = $this->calculatePrice($result);
         $response->assertStatus(Response::HTTP_OK);
         $this->assertEqualsCanonicalizing($vehiclePrices, $response->json());
@@ -170,6 +250,6 @@ class CalculateTransportPriceTest extends TestCase
      */
     public function sendRequest(): TestResponse
     {
-        return $this->withHeaders($this->headers)->postJson(env('APP_URL') . '/api/calculate-transport', $this->body);
+        return $this->withHeaders($this->headers)->getJson(env('APP_URL') . '/api/calculate-transport' . '?' . http_build_query($this->body));
     }
 }

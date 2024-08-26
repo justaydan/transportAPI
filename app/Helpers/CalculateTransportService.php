@@ -4,7 +4,6 @@ namespace App\Helpers;
 
 use App\Models\VehicleType;
 use GuzzleHttp\Client;
-use SplPriorityQueue;
 
 class CalculateTransportService
 {
@@ -24,60 +23,13 @@ class CalculateTransportService
     }
 
 
-    public function buildMaxtricForGraph(array $cities)
+    public function calculateDistance(array $cities)
     {
-        $grid = array_fill(0, count($cities), array_fill(0, count($cities), 0)); // Pre-fill the grid with zeros
-        for ($i = 0; $i < count($cities); $i++) {
-            for ($j = $i + 1; $j < count($cities); $j++) {
-                $km = $this->callGoogleApi($cities[$i], $cities[$j]);
-                $grid[$i][$j] = $grid[$j][$i] = $km;
-            }
+        $distance = 0;
+        for ($i = 0; $i < count($cities)-1; $i++) {
+            $distance += $this->callGoogleApi($cities[$i], $cities[$i+1]);
         }
-        return $grid;
-    }
-
-
-    public function dijkstraMinCostAllNodes($graph)
-    {
-        $n = count($graph);
-
-        $pq = new SplPriorityQueue();
-        $pq->setExtractFlags(SplPriorityQueue::EXTR_BOTH);
-
-        $dist = [];
-
-        for ($i = 0; $i < $n; $i++) {
-            $visited_set = [$i];
-            $visited_key = implode(',', $visited_set);
-            $pq->insert([$visited_set, $i], 0);
-            $dist[$visited_key][$i] = 0;
-        }
-
-        while (!$pq->isEmpty()) {
-            $element = $pq->extract();
-            $cost = -$element['priority'];
-            list($visited_set, $u) = $element['data'];
-
-            if (count($visited_set) == $n) {
-                return $cost;
-            }
-
-            for ($v = 0; $v < $n; $v++) {
-                if ($graph[$u][$v] > 0) {  // There is an edge between $u and $v
-                    $new_visited_set = array_unique(array_merge($visited_set, [$v]));
-                    sort($new_visited_set); // Ensure the array is sorted to maintain consistent keys
-                    $new_visited_key = implode(',', $new_visited_set);
-                    $new_cost = $cost + $graph[$u][$v];
-
-                    if (!isset($dist[$new_visited_key][$v]) || $new_cost < $dist[$new_visited_key][$v]) {
-                        $dist[$new_visited_key][$v] = $new_cost;
-                        $pq->insert([$new_visited_set, $v], -$new_cost); // negative cost for min-heap
-                    }
-                }
-            }
-        }
-
-        return -1;
+        return $distance;
     }
 
 
